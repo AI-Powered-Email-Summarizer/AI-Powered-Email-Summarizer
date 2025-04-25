@@ -264,6 +264,10 @@ def fetch_and_classify_emails(email_id, password):
             "time": email_time
         })
 
+        # Auto-reply condition (Example: if the subject contains 'urgent')
+        if "urgent" in subject.lower():
+            send_auto_reply(email_id, password, sender, "Thank you for your urgent email. I'll respond shortly.")
+
     imap.logout()
     return classified
 
@@ -285,4 +289,3 @@ def send_auto_reply(user_email, password, to_email, message_body):
         print(f"✅ Auto-reply sent to {to_email}")
     except Exception as e:
         print(f"❌ Failed to send auto-reply to {to_email}: {e}")
-
