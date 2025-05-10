@@ -1,147 +1,3 @@
-'''import imaplib
-import email
-import datetime
-from email.header import decode_header
-from bs4 import BeautifulSoup
-from dateparser import parse as parse_date
-
-# Define keywords for classification
-CATEGORY_KEYWORDS = {
-    "Work/Business": ["meeting", "project", "deadline", "work", "business"],
-    "Education & Learning": ["course", "lecture", "exam", "class"],
-    "Finance & Banking": ["bank", "transaction", "payment", "loan"],
-    "Legal & Government": ["law", "policy", "govt", "compliance"],
-    "E-commerce & Orders": ["order", "invoice", "shipment", "delivery"],
-    "Healthcare & Medical": ["doctor", "appointment", "prescription", "medicine"],
-    "Technical Support": ["bug", "issue", "support", "ticket"],
-    "Travel & Hospitality": ["flight", "hotel", "booking"],
-    "Newsletters & Subscriptions": ["newsletter", "subscribe", "subscription"],
-    "Social Media Notifications": ["Facebook", "Twitter", "Instagram"],
-    "Personal": ["family", "friends", "birthday"],
-    "Promotions": ["sale", "offer", "discount", "deal"]
-}
-
-CATEGORY_PRIORITY = list(CATEGORY_KEYWORDS.keys()) + ["Uncategorized"]
-
-# Get today's date in required format
-def get_today_date():
-    return datetime.datetime.now().strftime("%d-%b-%Y")
-
-# Extract body content from email
-def extract_body(msg):
-    if msg.is_multipart():
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            content_disposition = str(part.get("Content-Disposition"))
-            if content_type == "text/plain" and "attachment" not in content_disposition:
-                return part.get_payload(decode=True).decode(errors="ignore")
-            elif content_type == "text/html" and "attachment" not in content_disposition:
-                html = part.get_payload(decode=True).decode(errors="ignore")
-                return BeautifulSoup(html, "html.parser").text
-    else:
-        return msg.get_payload(decode=True).decode(errors="ignore")
-    return ""
-
-# Classify email by subject + body
-def classify_email(subject, body):
-    combined = f"{subject} {body}".lower()
-    for category in CATEGORY_KEYWORDS:
-        for keyword in CATEGORY_KEYWORDS[category]:
-            if keyword.lower() in combined:
-                return category
-    return "Uncategorized"
-
-# Summarize emails for each category
-def summarize_emails(classified_emails):
-    """
-    Generate a summary of emails for each category.
-    
-    Args:
-        classified_emails (dict): Dictionary mapping categories to lists of email dictionaries.
-    
-    Returns:
-        dict: Dictionary mapping categories to summary strings.
-    """
-    summaries = {}
-    for category in CATEGORY_PRIORITY:
-        emails = classified_emails.get(category, [])
-        if not emails:
-            summaries[category] = "No emails in this category."
-            continue
-        
-        # Ensure emails is a list of dictionaries
-        valid_emails = [e for e in emails if isinstance(e, dict) and 'subject' in e]
-        if not valid_emails:
-            summaries[category] = "No valid email data available."
-            continue
-        
-        # Generate summary (list up to 3 subjects)
-        summary = "\n".join([f"• {e['subject']}" for e in valid_emails[:3]])
-        if len(valid_emails) > 3:
-            summary += f"\n• ...and {len(valid_emails) - 3} more emails."
-        summaries[category] = summary or "No summary available."
-    
-    return summaries
-
-# Main function to fetch, parse, classify
-def fetch_and_classify_emails(email_id, password):
-    imap = imaplib.IMAP4_SSL("imap.gmail.com")
-    imap.login(email_id, password)
-    imap.select("inbox")
-
-    # Search for today's emails
-    status, messages = imap.search(None, f'(ON "{get_today_date()}")')
-    email_ids = messages[0].split()
-
-    classified = {cat: [] for cat in CATEGORY_PRIORITY}
-
-    for eid in email_ids:
-        res, msg_data = imap.fetch(eid, "(RFC822)")
-        raw = email.message_from_bytes(msg_data[0][1])
-
-        # Decode subject
-        subject_raw = raw["Subject"]
-        if subject_raw:
-            decoded = decode_header(subject_raw)[0]
-            subject = decoded[0].decode(decoded[1]) if isinstance(decoded[0], bytes) else decoded[0]
-        else:
-            subject = "No Subject"
-
-        # Extract sender
-        sender = raw.get("From", "Unknown Sender")
-
-        # Extract and clean body
-        body = extract_body(raw)
-
-        # Get full date and time
-        raw_date = raw.get("Date", "")
-        parsed_date = parse_date(raw_date)
-
-        if parsed_date:
-            email_date = parsed_date.strftime("%Y-%m-%d")
-            email_time = parsed_date.strftime("%H:%M:%S")
-        else:
-            email_date = "Unknown Date"
-            email_time = "Unknown Time"
-
-        # Classify email
-        category = classify_email(subject, body)
-
-        # Add to classified dict
-        classified[category].append({
-            "subject": subject,
-            "from": sender,
-            "body": body,
-            "date": email_date,
-            "time": email_time
-        })
-
-    imap.logout()
-    return classified'''
-
-
-
-
 import imaplib
 import email
 import datetime
@@ -151,6 +7,7 @@ from dateparser import parse as parse_date
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import os
 
 # Define keywords for classification
 CATEGORY_KEYWORDS = {
@@ -222,11 +79,15 @@ def summarize_emails(classified_emails):
 # Main function to fetch, parse, classify emails
 def fetch_and_classify_emails(email_id, password):
     imap = imaplib.IMAP4_SSL("imap.gmail.com")
-    imap.login(email_id, password)
-    imap.select("inbox")
+    try:
+        imap.login(email_id, password)
+    except imaplib.IMAP4.error:
+        print("❌ Login failed. Please check your email or password.")
+        return {}
 
-    status, messages = imap.search(None, f'(ON "{get_today_date()}")')
-    email_ids = messages[0].split()
+    imap.select("inbox")
+    status, messages = imap.search(None, "ALL")  # Fetch all emails regardless of read status or date
+    email_ids = messages[0].split()[-50:]        # Get the latest 50 emails
 
     classified = {cat: [] for cat in CATEGORY_PRIORITY}
 
@@ -237,7 +98,10 @@ def fetch_and_classify_emails(email_id, password):
         subject_raw = raw["Subject"]
         if subject_raw:
             decoded = decode_header(subject_raw)[0]
-            subject = decoded[0].decode(decoded[1]) if isinstance(decoded[0], bytes) else decoded[0]
+            try:
+                subject = decoded[0].decode(decoded[1]) if isinstance(decoded[0], bytes) else decoded[0]
+            except (TypeError, LookupError) as e:
+                subject = "Failed to decode subject"
         else:
             subject = "No Subject"
 
@@ -267,7 +131,7 @@ def fetch_and_classify_emails(email_id, password):
     imap.logout()
     return classified
 
-# Function to send auto-reply
+# Function to send auto-reply 
 def send_auto_reply(user_email, password, to_email, message_body):
     try:
         msg = MIMEMultipart()
@@ -285,4 +149,3 @@ def send_auto_reply(user_email, password, to_email, message_body):
         print(f"✅ Auto-reply sent to {to_email}")
     except Exception as e:
         print(f"❌ Failed to send auto-reply to {to_email}: {e}")
-
